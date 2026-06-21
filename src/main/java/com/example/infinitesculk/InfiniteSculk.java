@@ -24,6 +24,7 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
     private boolean bypassXp;
     private int spreadSpeed;
     private int chargePower;
+    private int rebloomCharge;
 
     /**
      * Cache: leagă locația unui catalizator (cheie = coordonatele lui ca string) de instanța
@@ -44,7 +45,7 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
      * sute de re-bloom-uri pe secundă și sufoca serverul.
      */
     private final Map<String, Long> lastRebloomTime = new ConcurrentHashMap<>();
-    private static final long REBLOOM_COOLDOWN_MS = 250;
+    private static final long REBLOOM_COOLDOWN_MS = 25;
 
     /**
      * Limită de siguranță: numărul maxim de re-bloom-uri consecutive permise per catalizator,
@@ -86,10 +87,12 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         this.bypassXp = getConfig().getBoolean("bypass-xp-requirement", true);
         this.spreadSpeed = getConfig().getInt("spread-speed-multiplier", 2);
         this.chargePower = getConfig().getInt("charge-power", 1000);
-        this.maxRebloomsPerCatalyst = getConfig().getInt("max-reblooms-per-catalyst", 500);
+        this.maxRebloomsPerCatalyst = getConfig().getInt("max-reblooms-per-catalyst", 5000);
+        this.rebloomCharge = getConfig().getInt("rebloom-charge", 8);
 
         if (this.spreadSpeed < 1) this.spreadSpeed = 1;
         if (this.maxRebloomsPerCatalyst < 1) this.maxRebloomsPerCatalyst = 1;
+        if (this.rebloomCharge < 1) this.rebloomCharge = 1;
 
         // SculkBloomEvent.setCharge() acceptă DOAR valori in intervalul [0, 1000].
         // Orice valoare in afara acestui interval arunca IllegalArgumentException
@@ -102,6 +105,9 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         if (this.chargePower < 0) {
             getLogger().warning("charge-power din config.yml este negativ. Valoarea a fost setata la 0.");
             this.chargePower = 0;
+        }
+        if (this.rebloomCharge > 1000) {
+            this.rebloomCharge = 1000;
         }
     }
 
@@ -220,10 +226,13 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
             return;
         }
 
-        // Toate verificările au trecut: re-alimentăm cursorul cu charge maxim, plecând EXACT
-        // din vecinul neconvertit găsit — nu din blocul vechi. Asta elimină risipa de timp prin
-        // teren deja transformat și duce extinderea direct spre marginea reală.
-        catalyst.bloom(frontierTarget, chargePower);
+        // Toate verificările au trecut: re-alimentăm cursorul cu UN CHARGE MIC, plecând EXACT
+        // din vecinul neconvertit găsit. Folosim charge mic intenționat (rebloomCharge, nu
+        // chargePower): un cursor cu charge mic se consumă rapid lângă punctul de start, deci
+        // convertește 1-2 blocuri chiar la margine și se oprește, în loc să rătăcească mult
+        // timp prin rețeaua existentă de sculk. Compensăm volumul redus per cursor prin
+        // injecții foarte dese (cooldown minim), nu prin charge mare per injecție.
+        catalyst.bloom(frontierTarget, rebloomCharge);
         lastRebloomTime.put(catalystKey, now);
         rebloomCount.put(catalystKey, count + 1);
     }
