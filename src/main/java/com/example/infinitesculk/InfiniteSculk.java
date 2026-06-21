@@ -14,9 +14,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public final class InfiniteSculk extends JavaPlugin implements CommandExecutor {
 
@@ -24,10 +25,11 @@ public final class InfiniteSculk extends JavaPlugin implements CommandExecutor {
     private int searchRadius;
     private int blocksPerTick;
     private int taskInterval;
+    private boolean requireCatalyst;
 
     private BukkitTask spreadTask;
 
-    // Cele 6 directii ortogonale (fetele unui bloc), folosite pentru extinderea bloc-cu-bloc.
+    // Cele 6 directii ortogonale (fetele unui bloc).
     private static final BlockFace[] FACES = {
             BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST,
             BlockFace.WEST, BlockFace.UP, BlockFace.DOWN
@@ -39,7 +41,7 @@ public final class InfiniteSculk extends JavaPlugin implements CommandExecutor {
         loadPluginConfig();
         this.getCommand("infinitesculk").setExecutor(this);
         startSpreadTask();
-        getLogger().info("InfiniteSculk v2.0.0 a fost pornit! Sculk-ul se extinde acum bloc-cu-bloc, automat.");
+        getLogger().info("InfiniteSculk v3.0.0 a fost pornit! Extindere vanilla: vein -> sculk, cu catalizator conectat.");
     }
 
     @Override
@@ -53,8 +55,8 @@ public final class InfiniteSculk extends JavaPlugin implements CommandExecutor {
         this.searchRadius = getConfig().getInt("search-radius", 40);
         this.blocksPerTick = getConfig().getInt("blocks-per-tick", 64);
         this.taskInterval = getConfig().getInt("task-interval-ticks", 2);
+        this.requireCatalyst = getConfig().getBoolean("require-connected-catalyst", true);
 
-        // Validari de siguranta, ca valori absurde din config sa nu strice serverul
         if (this.searchRadius < 4) this.searchRadius = 4;
         if (this.searchRadius > 100) this.searchRadius = 100;
         if (this.blocksPerTick < 1) this.blocksPerTick = 1;
@@ -64,8 +66,6 @@ public final class InfiniteSculk extends JavaPlugin implements CommandExecutor {
     private void startSpreadTask() {
         stopSpreadTask();
         if (!isEnabled) return;
-
-        // Rulam periodic pe thread-ul principal (modificarile de blocuri TREBUIE facute acolo).
         this.spreadTask = getServer().getScheduler().runTaskTimer(
                 this, this::runSpreadStep, taskInterval, taskInterval);
     }
@@ -77,14 +77,8 @@ public final class InfiniteSculk extends JavaPlugin implements CommandExecutor {
         }
     }
 
-    /**
-     * Un pas de extindere: pentru fiecare jucator online, cautam blocuri de sculk in jurul lui
-     * care au cel putin un vecin neconvertit, si convertim acel vecin direct in sculk. Limitam
-     * numarul total de conversii per pas (blocksPerTick) ca sa nu apese serverul.
-     */
     private void runSpreadStep() {
         int budget = blocksPerTick;
-
         for (Player player : getServer().getOnlinePlayers()) {
             if (budget <= 0) break;
             budget = spreadAroundPlayer(player, budget);
@@ -92,186 +86,205 @@ public final class InfiniteSculk extends JavaPlugin implements CommandExecutor {
     }
 
     /**
-     * Cauta blocuri de sculk in jurul unui jucator si extinde din ele in blocurile neconvertite
-     * vecine. Returneaza bugetul ramas dupa conversii.
+     * Cauta blocuri de sculk in jurul jucatorului care apartin unei structuri ce are un catalizator
+     * conectat (adiacent), si extinde din ele respectand algoritmul vanilla.
      */
     private int spreadAroundPlayer(Player player, int budget) {
         Block center = player.getLocation().getBlock();
 
-        // Adunam intai toate frontierele candidate (blocuri sculk cu macar un vecin convertibil),
-        // apoi convertim. Amestecam lista ca extinderea sa para naturala, nu mereu in aceeasi directie.
-        List<Block> frontier = new ArrayList<>();
-
+        List<Block> sculkBlocks = new ArrayList<>();
         int r = searchRadius;
         for (int x = -r; x <= r; x++) {
             for (int y = -r; y <= r; y++) {
                 for (int z = -r; z <= r; z++) {
                     Block block = center.getRelative(x, y, z);
-
-                    // Ne intereseaza doar blocurile care SUNT deja sculk (sursa de extindere)
-                    if (block.getType() != Material.SCULK) continue;
-
-                    // Verificam rapid daca are macar un vecin convertibil; daca da, e o frontiera
-                    if (hasConvertibleNeighbor(block)) {
-                        frontier.add(block);
+                    if (block.getType() == Material.SCULK) {
+                        sculkBlocks.add(block);
                     }
                 }
             }
         }
 
-        if (frontier.isEmpty()) return budget;
+        if (sculkBlocks.isEmpty()) return budget;
 
-        Collections.shuffle(frontier);
+        Collections.shuffle(sculkBlocks);
 
-        for (Block sculkBlock : frontier) {
+        for (Block sculkBlock : sculkBlocks) {
             if (budget <= 0) break;
-            budget = convertNeighbors(sculkBlock, budget);
+
+            // Conditie globala: extindem doar daca acest bloc de sculk apartine unei structuri
+            // care are macar un sculk catalyst lipit (adiacent) de ea undeva.
+            if (requireCatalyst && !structureHasConnectedCatalyst(sculkBlock)) {
+                continue;
+            }
+
+            budget = expandFrom(sculkBlock, budget);
         }
 
         return budget;
     }
 
     /**
-     * Pentru un bloc de sculk dat, parcurge vecinii in ordine aleatorie si incearca sa-i extinda
-     * RESPECTAND mecanica vanilla:
-     *   1. Daca vecinul e aer/apa -> creste un sculk vein pe fata dinspre blocul sursa (ca lichenul).
-     *   2. Daca vecinul e un bloc solid convertibil (tag SCULK_REPLACEABLE) -> il transforma in
-     *      sculk block, apoi creste sculk vein-uri pe fetele lui expuse la aer (exact ca vanilla).
+     * Aplica algoritmul de extindere pornind dintr-un bloc de sculk, pe fiecare bloc candidat X
+     * din vecinatate (un bloc solid convertibil sau orice bloc langa care vrem sa crestem):
+     *
+     *   1. Ne uitam la blocul de DEASUPRA lui X (X+UP). Putem pune acolo un sculk vein (lipit
+     *      de fata de sus a lui X)? Daca deasupra lui X e ceva ce NU poate fi acoperit (bloc
+     *      solid, alt sculk etc.) -> skip, trecem la urmatorul.
+     *   2. Daca DA -> punem sculk vein deasupra lui X (pe fata DOWN a vein-ului, prins de X).
+     *   3. Verificam daca X insusi poate fi inlocuit cu sculk block:
+     *        - daca NU -> lasam vein-ul deasupra si trecem mai departe.
+     *        - daca DA -> stergem vein-ul de deasupra SI inlocuim X cu sculk block.
+     *
      * Returneaza bugetul ramas.
      */
-    private int convertNeighbors(Block sculkBlock, int budget) {
-        List<BlockFace> faces = new ArrayList<>(Arrays.asList(FACES.clone()));
+    private int expandFrom(Block sculkBlock, int budget) {
+        List<BlockFace> faces = new ArrayList<>(List.of(FACES));
         Collections.shuffle(faces);
 
         for (BlockFace face : faces) {
             if (budget <= 0) break;
 
-            Block neighbor = sculkBlock.getRelative(face);
-            Material type = neighbor.getType();
+            // Blocul candidat X = un vecin al blocului de sculk
+            Block x = sculkBlock.getRelative(face);
+            Material xType = x.getType();
 
-            // Sarim peste tot ce e deja din familia sculk
-            if (type == Material.SCULK || type == Material.SCULK_VEIN || type == Material.SCULK_CATALYST) {
+            // X trebuie sa fie un bloc solid (ca sa aiba sens "deasupra" si "inlocuire").
+            // Sarim peste aer, apa, si peste blocuri care sunt deja din familia sculk.
+            if (xType == Material.SCULK || xType == Material.SCULK_CATALYST || xType == Material.SCULK_VEIN) {
+                continue;
+            }
+            if (!xType.isSolid()) {
                 continue;
             }
 
-            if (type == Material.AIR || type == Material.CAVE_AIR || type == Material.VOID_AIR || type == Material.WATER) {
-                // Spatiu gol: vanilla pune un sculk vein pe fata dinspre blocul de sculk sursa.
-                if (placeVeinFace(neighbor, face.getOppositeFace())) {
+            // PASUL 1: blocul de deasupra lui X
+            Block above = x.getRelative(BlockFace.UP);
+            Material aboveType = above.getType();
+
+            // Putem acoperi spatiul de deasupra cu un vein? (trebuie sa fie aer/apa, sau deja
+            // un vein fara fata DOWN setata). Daca e bloc solid sau orice altceva -> skip.
+            boolean canCover = (aboveType == Material.AIR || aboveType == Material.CAVE_AIR
+                    || aboveType == Material.VOID_AIR || aboveType == Material.WATER
+                    || aboveType == Material.SCULK_VEIN);
+            if (!canCover) {
+                // Deasupra lui X e ceva ce nu poate fi acoperit -> skip
+                continue;
+            }
+
+            // Vein-ul de deasupra lui X se prinde de fata de SUS a lui X, adica fata DOWN a vein-ului.
+            // Verificam ca X (cel de sub vein) e solid (este, am verificat mai sus) si ca fata e permisa.
+            if (aboveType == Material.SCULK_VEIN) {
+                BlockData aboveData = above.getBlockData();
+                if (aboveData instanceof MultipleFacing && ((MultipleFacing) aboveData).hasFace(BlockFace.DOWN)) {
+                    // vein-ul cu fata DOWN exista deja aici; tratam ca si cum l-am pus deja
+                } else {
+                    placeVeinFaceDown(above);
                     budget--;
                 }
-            } else if (Tag.SCULK_REPLACEABLE.isTagged(type)) {
-                // Bloc solid convertibil: il facem sculk block, apoi crestem vein pe fetele expuse.
-                neighbor.setType(Material.SCULK, true);
+            } else {
+                // PASUL 2: punem vein deasupra lui X
+                placeVeinFaceDown(above);
                 budget--;
-                growVeinsAround(neighbor, budget);
             }
+
+            if (budget < 0) budget = 0;
+
+            // PASUL 3: poate X sa devina sculk block?
+            if (Tag.SCULK_REPLACEABLE.isTagged(xType)) {
+                // DA -> stergem vein-ul de deasupra si inlocuim X cu sculk
+                if (above.getType() == Material.SCULK_VEIN) {
+                    removeVeinFaceDown(above);
+                }
+                x.setType(Material.SCULK, true);
+            }
+            // NU -> lasam vein-ul deasupra (deja pus) si trecem mai departe
         }
 
         return budget;
     }
 
     /**
-     * Creste sculk vein-uri pe fetele expuse la aer ale unui bloc proaspat convertit in sculk,
-     * exact ca in vanilla (unde un nou sculk block incearca sa adauge vein pe blocurile adiacente).
-     * Aici punem vein-urile pe blocurile de aer din jur, orientate spre noul bloc de sculk.
+     * Pune un sculk vein in blocul dat, cu fata DOWN setata (vein prins de blocul de sub el),
+     * pastrand eventualele fete existente daca era deja un vein.
      */
-    private void growVeinsAround(Block sculkBlock, int budget) {
-        for (BlockFace face : FACES) {
-            if (budget <= 0) break;
-
-            Block neighbor = sculkBlock.getRelative(face);
-            Material type = neighbor.getType();
-
-            if (type == Material.AIR || type == Material.CAVE_AIR || type == Material.VOID_AIR || type == Material.WATER) {
-                placeVeinFace(neighbor, face.getOppositeFace());
-            }
-        }
-    }
-
-    /**
-     * Plaseaza un sculk vein in blocul dat (care trebuie sa fie aer/apa), cu textura pe fata
-     * indicata. Daca blocul e deja sculk vein, doar adauga fata respectiva la cele existente.
-     * Returneaza true daca s-a modificat ceva.
-     */
-    private boolean placeVeinFace(Block target, BlockFace face) {
-        Material type = target.getType();
-
-        boolean isReplaceableForVein = (type == Material.AIR || type == Material.CAVE_AIR
-                || type == Material.VOID_AIR || type == Material.WATER || type == Material.SCULK_VEIN);
-        if (!isReplaceableForVein) {
-            return false;
-        }
-
-        // Sculk vein se ataseaza pe fata unui bloc solid; daca blocul de care ar trebui sa se
-        // prinda (in directia 'face') nu e solid, vein-ul nu poate sta acolo.
-        Block attachTo = target.getRelative(face);
-        if (!attachTo.getType().isSolid()) {
-            return false;
-        }
-
-        BlockData currentData = target.getBlockData();
+    private void placeVeinFaceDown(Block target) {
         MultipleFacing veinData;
+        BlockData current = target.getBlockData();
 
-        if (type == Material.SCULK_VEIN && currentData instanceof MultipleFacing) {
-            // Pastram fetele existente si adaugam noua fata
-            veinData = (MultipleFacing) currentData;
-            if (veinData.hasFace(face)) {
-                return false; // fata exista deja, nimic de facut
-            }
+        if (target.getType() == Material.SCULK_VEIN && current instanceof MultipleFacing) {
+            veinData = (MultipleFacing) current;
         } else {
             veinData = (MultipleFacing) Material.SCULK_VEIN.createBlockData();
         }
 
-        if (!veinData.getAllowedFaces().contains(face)) {
-            return false;
+        if (veinData.getAllowedFaces().contains(BlockFace.DOWN)) {
+            veinData.setFace(BlockFace.DOWN, true);
+            target.setBlockData(veinData, true);
         }
-
-        veinData.setFace(face, true);
-        target.setBlockData(veinData, true);
-        return true;
     }
 
     /**
-     * Verifica daca un bloc de sculk are macar un vecin care merita procesat — fie un bloc
-     * solid convertibil in sculk, fie un spatiu de aer/apa unde poate creste un sculk vein.
+     * Scoate fata DOWN a unui sculk vein. Daca dupa scoatere vein-ul nu mai are nicio fata,
+     * blocul devine aer (vein-ul dispare complet).
      */
-    private boolean hasConvertibleNeighbor(Block block) {
-        for (BlockFace face : FACES) {
-            Block neighbor = block.getRelative(face);
-            Material type = neighbor.getType();
-
-            // Bloc solid care poate deveni sculk
-            if (Tag.SCULK_REPLACEABLE.isTagged(type)) {
-                return true;
-            }
-
-            // Spatiu gol unde ar putea creste un vein (daca exista un bloc solid de care sa se prinda)
-            if (type == Material.AIR || type == Material.CAVE_AIR || type == Material.VOID_AIR || type == Material.WATER) {
-                if (canAnyVeinAttach(neighbor)) {
-                    return true;
-                }
-            }
+    private void removeVeinFaceDown(Block veinBlock) {
+        BlockData current = veinBlock.getBlockData();
+        if (!(current instanceof MultipleFacing)) {
+            veinBlock.setType(Material.AIR, false);
+            return;
         }
-        return false;
+
+        MultipleFacing veinData = (MultipleFacing) current;
+        veinData.setFace(BlockFace.DOWN, false);
+
+        // Daca nu mai are nicio fata activa, vein-ul dispare
+        if (veinData.getFaces().isEmpty()) {
+            veinBlock.setType(Material.AIR, false);
+        } else {
+            veinBlock.setBlockData(veinData, true);
+        }
     }
 
     /**
-     * Verifica daca intr-un bloc de aer/apa ar putea sta un sculk vein, adica daca are macar
-     * o fata adiacenta catre un bloc solid de care vein-ul sa se poata prinde, fata care inca
-     * nu e acoperita de vein.
+     * Verifica daca structura de sculk din care face parte blocul dat are un sculk catalyst
+     * lipit (adiacent ortogonal) de oricare bloc al ei. Parcurge structura conectata (flood-fill)
+     * prin blocuri de sculk si sculk vein, limitat ca dimensiune ca sa nu coste prea mult.
      */
-    private boolean canAnyVeinAttach(Block airBlock) {
-        BlockData data = airBlock.getBlockData();
-        MultipleFacing existing = (airBlock.getType() == Material.SCULK_VEIN && data instanceof MultipleFacing)
-                ? (MultipleFacing) data : null;
+    private boolean structureHasConnectedCatalyst(Block start) {
+        Set<Block> visited = new HashSet<>();
+        List<Block> queue = new ArrayList<>();
+        queue.add(start);
+        visited.add(start);
 
-        for (BlockFace face : FACES) {
-            if (airBlock.getRelative(face).getType().isSolid()) {
-                if (existing == null || !existing.hasFace(face)) {
+        int maxBlocks = 2000; // limita de siguranta pentru flood-fill
+        int index = 0;
+
+        while (index < queue.size()) {
+            Block current = queue.get(index++);
+
+            for (BlockFace face : FACES) {
+                Block neighbor = current.getRelative(face);
+                Material type = neighbor.getType();
+
+                // Am gasit un catalizator lipit de structura -> conexiune confirmata
+                if (type == Material.SCULK_CATALYST) {
                     return true;
+                }
+
+                // Continuam flood-fill-ul doar prin blocuri din familia sculk (block + vein)
+                if ((type == Material.SCULK || type == Material.SCULK_VEIN) && !visited.contains(neighbor)) {
+                    if (visited.size() >= maxBlocks) {
+                        // Structura e prea mare ca s-o parcurgem integral; nu blocam extinderea
+                        // doar pentru ca n-am terminat cautarea — presupunem ca e conectata.
+                        return true;
+                    }
+                    visited.add(neighbor);
+                    queue.add(neighbor);
                 }
             }
         }
+
         return false;
     }
 
@@ -283,7 +296,7 @@ public final class InfiniteSculk extends JavaPlugin implements CommandExecutor {
                 return true;
             }
             loadPluginConfig();
-            startSpreadTask(); // repornim task-ul cu noile setari
+            startSpreadTask();
             sender.sendMessage("\u00a7a[InfiniteSculk] Setarile au fost reincarcate cu succes!");
             return true;
         }
