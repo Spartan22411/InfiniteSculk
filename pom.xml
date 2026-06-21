@@ -15,19 +15,19 @@
     </properties>
 
     <repositories>
-        <!-- Repozitoriul oficial central de rezervă pentru Bukkit -->
+        <!-- Depozitul central pentru API-ul general de Spigot/Mojang -->
         <repository>
-            <id>spigotmc-public</id>
+            <id>spigotmc-repo</id>
             <url>https://spigotmc.org</url>
         </repository>
     </repositories>
 
     <dependencies>
-        <!-- Folosim variabila stabilă generală de Bukkit care nu se șterge niciodată de pe servere -->
+        <!-- Folosim o versiune generală de Spigot API care are toate evenimentele de Sculk și este stocată permanent -->
         <dependency>
-            <groupId>org.bukkit</groupId>
-            <artifactId>bukkit</artifactId>
-            <version>1.21.1-R0.1-SNAPSHOT</version>
+            <groupId>org.spigotmc</groupId>
+            <artifactId>spigot-api</artifactId>
+            <version>1.21-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
