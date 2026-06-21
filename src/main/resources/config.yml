@@ -11,3 +11,8 @@ spread-speed-multiplier: 2
 
 # Puterea de incarcare (charge) injectata cand bypass-xp-requirement este true
 charge-power: 1000
+
+# Numarul maxim de re-injectari de charge permise per catalizator, inainte de a lasa
+# raspandirea sa se opreasca natural. Limiteaza cat de mult se poate extinde sculk-ul
+# dintr-un singur eveniment de moarte, ca sa nu consume tot terenul din jur la nesfarsit.
+max-reblooms-per-catalyst: 500
