@@ -1,0 +1,5 @@
+name: InfiniteSculk
+version: 1.0.0
+main: com.example.infinitesculk.InfiniteSculk
+api-version: '1.21'
+author: AI_Assistant
