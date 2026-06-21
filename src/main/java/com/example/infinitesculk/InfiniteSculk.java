@@ -24,7 +24,6 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
     private boolean bypassXp;
     private int spreadSpeed;
     private int chargePower;
-    private int rebloomCharge;
 
     /**
      * Cache: leagă locația unui catalizator (cheie = coordonatele lui ca string) de instanța
@@ -88,11 +87,9 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         this.spreadSpeed = getConfig().getInt("spread-speed-multiplier", 2);
         this.chargePower = getConfig().getInt("charge-power", 1000);
         this.maxRebloomsPerCatalyst = getConfig().getInt("max-reblooms-per-catalyst", 5000);
-        this.rebloomCharge = getConfig().getInt("rebloom-charge", 8);
 
         if (this.spreadSpeed < 1) this.spreadSpeed = 1;
         if (this.maxRebloomsPerCatalyst < 1) this.maxRebloomsPerCatalyst = 1;
-        if (this.rebloomCharge < 1) this.rebloomCharge = 1;
 
         // SculkBloomEvent.setCharge() acceptă DOAR valori in intervalul [0, 1000].
         // Orice valoare in afara acestui interval arunca IllegalArgumentException
@@ -105,9 +102,6 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         if (this.chargePower < 0) {
             getLogger().warning("charge-power din config.yml este negativ. Valoarea a fost setata la 0.");
             this.chargePower = 0;
-        }
-        if (this.rebloomCharge > 1000) {
-            this.rebloomCharge = 1000;
         }
     }
 
@@ -193,8 +187,7 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
             return;
         }
 
-        SculkCatalyst catalyst = catalystCache.get(catalystKey);
-        if (catalyst == null) {
+        if (!catalystCache.containsKey(catalystKey)) {
             return;
         }
 
@@ -202,73 +195,82 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         // fără nicio scanare, oricât de departe s-ar extinde sculk-ul.
         blockToCatalystKey.put(newlyConverted, catalystKey);
 
-        // În loc să injectăm bloom-ul pe blocul vechi (care ar lăsa cursorul să rătăcească random
-        // prin sculk-ul deja existent înainte să ajungă la o margine reală), căutăm direct un vecin
-        // neconvertit valid și pornim bloom-ul EXACT acolo. Asta sare complet peste pasul de
-        // "plimbare prin interior" și duce charge-ul direct la marginea utilă a răspândirii.
-        Block frontierTarget = findConvertibleNeighbor(newlyConverted);
-        if (frontierTarget == null) {
-            // Nu mai există niciun vecin neconvertit din acest punct — e un capăt mort,
-            // nu are rost să reinjectăm aici.
-            return;
-        }
-
-        // Verificăm limita de siguranță, ca să nu reinjectăm la nesfârșit fără control
+        // Verificăm limita de siguranță, ca să nu convertim la nesfârșit fără control
         int count = rebloomCount.getOrDefault(catalystKey, 0);
         if (count >= maxRebloomsPerCatalyst) {
             return;
         }
 
-        // Verificăm cooldown-ul, ca să nu trimitem zeci de bloom-uri pe tick pentru același catalizator
+        // Verificăm cooldown-ul, ca să nu facem zeci de conversii pe tick pentru același catalizator
         long now = System.currentTimeMillis();
         long lastTime = lastRebloomTime.getOrDefault(catalystKey, 0L);
         if (now - lastTime < REBLOOM_COOLDOWN_MS) {
             return;
         }
 
-        // Toate verificările au trecut: re-alimentăm cursorul cu UN CHARGE MIC, plecând EXACT
-        // din vecinul neconvertit găsit. Folosim charge mic intenționat (rebloomCharge, nu
-        // chargePower): un cursor cu charge mic se consumă rapid lângă punctul de start, deci
-        // convertește 1-2 blocuri chiar la margine și se oprește, în loc să rătăcească mult
-        // timp prin rețeaua existentă de sculk. Compensăm volumul redus per cursor prin
-        // injecții foarte dese (cooldown minim), nu prin charge mare per injecție.
-        catalyst.bloom(frontierTarget, rebloomCharge);
+        // NU mai folosim catalyst.bloom() pentru extindere, fiindcă acela creează un cursor
+        // controlat 100% de motorul nativ (NMS), care alege random încotro merge la fiecare pas —
+        // inclusiv înapoi prin sculk-ul deja existent, fără nicio influență din partea noastră.
+        // În schimb, convertim NOI ÎNȘINE, direct, unul sau mai mulți vecini neconvertiți ai
+        // blocului proaspăt creat. Asta garantează 100% că extinderea merge mereu spre exterior,
+        // cu prețul pierderii animației native de "bloom" pe aceste conversii (particule, sunet).
+        int convertedThisStep = convertNeighborsManually(newlyConverted, spreadSpeed);
+        if (convertedThisStep == 0) {
+            // Niciun vecin convertibil — capăt mort, nu mai are rost să continuăm de aici.
+            return;
+        }
+
         lastRebloomTime.put(catalystKey, now);
         rebloomCount.put(catalystKey, count + 1);
     }
 
     /**
-     * Caută primul vecin direct (cele 6 fețe) al unui bloc care poate fi convertit în sculk,
-     * folosind tag-ul oficial vanilla Tag.SCULK_REPLACEABLE pentru acuratețe maximă (același
-     * tag folosit intern de motorul de joc, deci nu ghicim noi ce e convertibil). Returnează
-     * acel bloc, ca să putem injecta bloom-ul direct acolo — nu pe blocul vechi deja convertit.
+     * Convertește manual, direct, până la {@code maxConversions} vecini neconvertiți ai unui bloc
+     * dat în Material.SCULK, folosind tag-ul oficial Tag.SCULK_REPLACEABLE pentru validare.
+     * Spre deosebire de catalyst.bloom(), această metodă nu creează niciun cursor și nu lasă
+     * nimic la voia hazardului — extinderea merge mereu și exclusiv spre blocuri neconvertite.
+     * Fiecare bloc convertit astfel e adăugat și el în blockToCatalystKey, ca lanțul de propagare
+     * să poată continua mai departe la următorul BlockSpreadEvent generat de motorul de joc
+     * (sculk vein-urile native tot apar normal pe fețele blocurilor noi).
+     *
+     * @return numărul real de blocuri convertite la acest pas
      */
-    private Block findConvertibleNeighbor(Block block) {
+    private int convertNeighborsManually(Block source, int maxConversions) {
         Block[] neighbors = new Block[] {
-                block.getRelative(1, 0, 0),
-                block.getRelative(-1, 0, 0),
-                block.getRelative(0, 1, 0),
-                block.getRelative(0, -1, 0),
-                block.getRelative(0, 0, 1),
-                block.getRelative(0, 0, -1)
+                source.getRelative(1, 0, 0),
+                source.getRelative(-1, 0, 0),
+                source.getRelative(0, 1, 0),
+                source.getRelative(0, -1, 0),
+                source.getRelative(0, 0, 1),
+                source.getRelative(0, 0, -1)
         };
 
+        String catalystKey = blockToCatalystKey.get(source);
+        int converted = 0;
+
         for (Block neighbor : neighbors) {
+            if (converted >= maxConversions) break;
+
             Material type = neighbor.getType();
 
-            // Deja sculk sau catalizator -> nu e o frontieră utilă, continuăm căutarea
+            // Deja sculk -> sărim, nu mai e nimic de convertit aici
             if (type == Material.SCULK || type == Material.SCULK_VEIN || type == Material.SCULK_CATALYST) {
                 continue;
             }
 
-            // Tag-ul oficial vanilla pentru tot ce poate fi înlocuit cu sculk (piatră, pământ,
-            // iarbă, deepslate etc.). Folosim exact tag-ul nativ, nu o listă ghicită de noi.
-            if (org.bukkit.Tag.SCULK_REPLACEABLE.isTagged(type)) {
-                return neighbor;
+            // Folosim exact tag-ul oficial vanilla, nu o listă ghicită de noi
+            if (!org.bukkit.Tag.SCULK_REPLACEABLE.isTagged(type)) {
+                continue;
             }
+
+            neighbor.setType(Material.SCULK, true);
+            if (catalystKey != null) {
+                blockToCatalystKey.put(neighbor, catalystKey);
+            }
+            converted++;
         }
 
-        return null;
+        return converted;
     }
 
     /**
