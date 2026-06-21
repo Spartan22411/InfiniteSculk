@@ -1,12 +1,4 @@
-Bun, am confirmat exact ce bănuiam. De vreme ce lucrezi cu PaperMC (nu plain Spigot), cea mai bună variantă e să folosești repo-ul oficial PaperMC, care conține și API-ul Paper (mai multe metode utile decât Spigot pur), nu doar Spigot-API.
-Ce e greșit la tine
-
-xmlns="http://apache.org" — incomplet, ar trebui http://maven.apache.org/POM/4.0.0
-<url>https://spigotmc.org</url> — e homepage-ul, nu repo Maven. Maven nu poate descărca dependențe de acolo.
-Folosești spigot-api în loc de paper-api — pentru PaperMC e mai bine să folosești API-ul lor direct.
-
-pom.xml corectat
-xml<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
