@@ -15,18 +15,18 @@
     </properties>
 
     <repositories>
-        <!-- Repozitoriul stabil JitPack -->
+        <!-- Repozitoriul oficial central de rezervă pentru Bukkit -->
         <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
+            <id>spigotmc-public</id>
+            <url>https://spigotmc.org</url>
         </repository>
     </repositories>
 
     <dependencies>
-        <!-- API-ul stabil oferit direct prin JitPack pentru versiunea 1.21.1 -->
+        <!-- Folosim variabila stabilă generală de Bukkit care nu se șterge niciodată de pe servere -->
         <dependency>
-            <groupId>com.github.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
+            <groupId>org.bukkit</groupId>
+            <artifactId>bukkit</artifactId>
             <version>1.21.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
