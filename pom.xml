@@ -22,10 +22,11 @@
     </repositories>
 
     <dependencies>
+        <!-- Aceasta este denumirea corectă de librărie compatibilă direct cu versiunile 1.21.10 și 1.21.11 -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>1.21.1-R0.1-SNAPSHOT</version>
+            <version>1.21.11-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
