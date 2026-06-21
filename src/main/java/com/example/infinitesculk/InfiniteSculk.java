@@ -24,10 +24,8 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
     public void onEnable() {
         saveDefaultConfig();
         loadPluginConfig();
-
         getServer().getPluginManager().registerEvents(this, this);
         this.getCommand("infinitesculk").setExecutor(this);
-
         getLogger().info("InfiniteSculk v1.2.0 a fost pornit cu control de viteza si bypass XP!");
     }
 
@@ -37,7 +35,7 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         this.bypassXp = getConfig().getBoolean("bypass-xp-requirement", true);
         this.spreadSpeed = getConfig().getInt("spread-speed-multiplier", 2);
         this.chargePower = getConfig().getInt("charge-power", 1000);
-        
+
         if (this.spreadSpeed < 1) this.spreadSpeed = 1;
     }
 
@@ -59,7 +57,7 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSculkBloom(SculkBloomEvent event) {
         if (!isEnabled) return;
-        
+
         // Ignoră complet valoarea originală de XP lăsată de mob și injectează direct puterea maximă
         if (bypassXp) {
             event.setCharge(chargePower);
@@ -71,17 +69,16 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSculkSpread(BlockSpreadEvent event) {
         if (!isEnabled) return;
-
         Block source = event.getSource();
         Material sourceType = source.getType();
 
         // Verificăm dacă blocul sursă aparține familiei de Sculk
         if (sourceType == Material.SCULK_CATALYST || sourceType == Material.SCULK || sourceType == Material.SCULK_VEIN) {
-            
+
             // Dacă se dorește bypass total XP, transformăm instant destinația în catalizator activ sau sculk block
             if (event.getBlock().getType() == Material.SCULK_CATALYST) {
                 org.bukkit.block.SculkCatalyst catalyst = (org.bukkit.block.SculkCatalyst) event.getBlock().getState();
-                
+
                 // Multiplicăm execuția în funcție de viteza aleasă în config
                 for (int i = 0; i < spreadSpeed; i++) {
                     catalyst.bloom(event.getBlock(), chargePower);
