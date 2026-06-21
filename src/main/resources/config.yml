@@ -1,14 +1,18 @@
-# Configurare InfiniteSculk v2.0
+# Configurare InfiniteSculk v3.0
 
 # Activeaza sau dezactiveaza complet extinderea automata a sculk-ului
 enabled: true
+
+# Daca true, sculk-ul se extinde DOAR daca structura lui are un sculk catalyst lipit (adiacent)
+# de ea. Daca pui false, sculk-ul se extinde din orice bloc de sculk, fara sa-i trebuiasca catalizator.
+require-connected-catalyst: true
 
 # Raza (in blocuri) in jurul fiecarui jucator in care se cauta sculk de extins.
 # Mai mare = sculk-ul se extinde si mai departe de jucator, dar costa mai mult CPU.
 # Recomandat: 30-50. Maxim permis: 100.
 search-radius: 40
 
-# Cate blocuri se convertesc in sculk la fiecare pas al task-ului (per total, toti jucatorii).
+# Cate blocuri se modifica (vein-uri + conversii) la fiecare pas al task-ului, per total.
 # Mai mare = extindere mai rapida, dar mai mult impact pe server.
 # Recomandat: 32-128.
 blocks-per-tick: 64
