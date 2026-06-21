@@ -14,10 +14,12 @@ public final class InfiniteSculk extends JavaPlugin implements Listener {
     public void onEnable() {
         getServer().getPluginManager().registerEvents(this, this);
     }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSculkBloom(SculkBloomEvent event) {
         event.setCharge(1000); 
     }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSculkSpread(BlockSpreadEvent event) {
         Block source = event.getSource();
