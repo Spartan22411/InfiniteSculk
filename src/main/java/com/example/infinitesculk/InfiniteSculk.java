@@ -196,6 +196,15 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         // fără nicio scanare, oricât de departe s-ar extinde sculk-ul.
         blockToCatalystKey.put(newlyConverted, catalystKey);
 
+        // Verificăm dacă acest bloc chiar reprezintă o "frontieră" — adică are în jurul lui
+        // blocuri care încă pot fi convertite. Dacă e deja complet înconjurat de sculk/aer/blocuri
+        // neconvertibile, nu are sens să reinjectăm charge aici: cursorul ar rătăci aiurea prin
+        // teren deja transformat în loc să împingă răspândirea mai departe. Asta evită exact
+        // comportamentul de "cursor care se plimbă fără rost prin sculk vechi".
+        if (!hasConvertibleNeighbor(newlyConverted)) {
+            return;
+        }
+
         // Verificăm limita de siguranță, ca să nu reinjectăm la nesfârșit fără control
         int count = rebloomCount.getOrDefault(catalystKey, 0);
         if (count >= maxRebloomsPerCatalyst) {
@@ -210,11 +219,51 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         }
 
         // Toate verificările au trecut: re-alimentăm cursorul cu charge maxim, plecând chiar
-        // din blocul proaspăt convertit. Charge-ul practic nu se mai termină cât timp tot
-        // reușește să convertească blocuri noi, fără nicio scanare costisitoare a hărții.
+        // din blocul proaspăt convertit, care am confirmat că e o frontieră reală. Charge-ul
+        // practic nu se mai termină cât timp tot reușește să convertească blocuri noi, fără
+        // nicio scanare costisitoare a hărții și fără să rătăcească prin teren deja transformat.
         catalyst.bloom(newlyConverted, chargePower);
         lastRebloomTime.put(catalystKey, now);
         rebloomCount.put(catalystKey, count + 1);
+    }
+
+    /**
+     * Verifică dacă blocul dat are cel puțin un vecin direct (cele 6 fețe) care poate fi
+     * convertit în sculk — adică e aer, apă, sau un bloc natural neconvertit încă. Folosit
+     * ca să identificăm doar blocurile aflate la marginea reală a răspândirii, nu cele
+     * deja complet înconjurate de sculk.
+     */
+    private boolean hasConvertibleNeighbor(Block block) {
+        Block[] neighbors = new Block[] {
+                block.getRelative(1, 0, 0),
+                block.getRelative(-1, 0, 0),
+                block.getRelative(0, 1, 0),
+                block.getRelative(0, -1, 0),
+                block.getRelative(0, 0, 1),
+                block.getRelative(0, 0, -1)
+        };
+
+        for (Block neighbor : neighbors) {
+            Material type = neighbor.getType();
+
+            // Deja sculk sau catalizator -> nu e o frontieră utilă, continuăm căutarea
+            if (type == Material.SCULK || type == Material.SCULK_VEIN || type == Material.SCULK_CATALYST) {
+                continue;
+            }
+
+            // Aer și apă pot primi sculk vein, deci sunt frontiere valide
+            if (type == Material.AIR || type == Material.CAVE_AIR || type == Material.WATER) {
+                return true;
+            }
+
+            // Orice alt bloc solid natural (piatră, pământ, deepslate etc.) e potențial
+            // convertibil prin tag-ul nativ sculk_replaceable verificat de motorul de joc.
+            // Nu reimplementăm acel tag aici; presupunem optimist că blocurile solide
+            // necunoscute sunt candidate valide, lăsând motorul nativ să decidă efectiv.
+            return true;
+        }
+
+        return false;
     }
 
     /**
