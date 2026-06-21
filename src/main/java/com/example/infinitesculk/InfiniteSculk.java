@@ -196,12 +196,14 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
         // fără nicio scanare, oricât de departe s-ar extinde sculk-ul.
         blockToCatalystKey.put(newlyConverted, catalystKey);
 
-        // Verificăm dacă acest bloc chiar reprezintă o "frontieră" — adică are în jurul lui
-        // blocuri care încă pot fi convertite. Dacă e deja complet înconjurat de sculk/aer/blocuri
-        // neconvertibile, nu are sens să reinjectăm charge aici: cursorul ar rătăci aiurea prin
-        // teren deja transformat în loc să împingă răspândirea mai departe. Asta evită exact
-        // comportamentul de "cursor care se plimbă fără rost prin sculk vechi".
-        if (!hasConvertibleNeighbor(newlyConverted)) {
+        // În loc să injectăm bloom-ul pe blocul vechi (care ar lăsa cursorul să rătăcească random
+        // prin sculk-ul deja existent înainte să ajungă la o margine reală), căutăm direct un vecin
+        // neconvertit valid și pornim bloom-ul EXACT acolo. Asta sare complet peste pasul de
+        // "plimbare prin interior" și duce charge-ul direct la marginea utilă a răspândirii.
+        Block frontierTarget = findConvertibleNeighbor(newlyConverted);
+        if (frontierTarget == null) {
+            // Nu mai există niciun vecin neconvertit din acest punct — e un capăt mort,
+            // nu are rost să reinjectăm aici.
             return;
         }
 
@@ -218,22 +220,21 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
             return;
         }
 
-        // Toate verificările au trecut: re-alimentăm cursorul cu charge maxim, plecând chiar
-        // din blocul proaspăt convertit, care am confirmat că e o frontieră reală. Charge-ul
-        // practic nu se mai termină cât timp tot reușește să convertească blocuri noi, fără
-        // nicio scanare costisitoare a hărții și fără să rătăcească prin teren deja transformat.
-        catalyst.bloom(newlyConverted, chargePower);
+        // Toate verificările au trecut: re-alimentăm cursorul cu charge maxim, plecând EXACT
+        // din vecinul neconvertit găsit — nu din blocul vechi. Asta elimină risipa de timp prin
+        // teren deja transformat și duce extinderea direct spre marginea reală.
+        catalyst.bloom(frontierTarget, chargePower);
         lastRebloomTime.put(catalystKey, now);
         rebloomCount.put(catalystKey, count + 1);
     }
 
     /**
-     * Verifică dacă blocul dat are cel puțin un vecin direct (cele 6 fețe) care poate fi
-     * convertit în sculk — adică e aer, apă, sau un bloc natural neconvertit încă. Folosit
-     * ca să identificăm doar blocurile aflate la marginea reală a răspândirii, nu cele
-     * deja complet înconjurate de sculk.
+     * Caută primul vecin direct (cele 6 fețe) al unui bloc care poate fi convertit în sculk,
+     * folosind tag-ul oficial vanilla Tag.SCULK_REPLACEABLE pentru acuratețe maximă (același
+     * tag folosit intern de motorul de joc, deci nu ghicim noi ce e convertibil). Returnează
+     * acel bloc, ca să putem injecta bloom-ul direct acolo — nu pe blocul vechi deja convertit.
      */
-    private boolean hasConvertibleNeighbor(Block block) {
+    private Block findConvertibleNeighbor(Block block) {
         Block[] neighbors = new Block[] {
                 block.getRelative(1, 0, 0),
                 block.getRelative(-1, 0, 0),
@@ -251,19 +252,14 @@ public final class InfiniteSculk extends JavaPlugin implements Listener, Command
                 continue;
             }
 
-            // Aer și apă pot primi sculk vein, deci sunt frontiere valide
-            if (type == Material.AIR || type == Material.CAVE_AIR || type == Material.WATER) {
-                return true;
+            // Tag-ul oficial vanilla pentru tot ce poate fi înlocuit cu sculk (piatră, pământ,
+            // iarbă, deepslate etc.). Folosim exact tag-ul nativ, nu o listă ghicită de noi.
+            if (org.bukkit.Tag.SCULK_REPLACEABLE.isTagged(type)) {
+                return neighbor;
             }
-
-            // Orice alt bloc solid natural (piatră, pământ, deepslate etc.) e potențial
-            // convertibil prin tag-ul nativ sculk_replaceable verificat de motorul de joc.
-            // Nu reimplementăm acel tag aici; presupunem optimist că blocurile solide
-            // necunoscute sunt candidate valide, lăsând motorul nativ să decidă efectiv.
-            return true;
         }
 
-        return false;
+        return null;
     }
 
     /**
