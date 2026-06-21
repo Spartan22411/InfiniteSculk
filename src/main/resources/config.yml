@@ -1,17 +1,13 @@
-# Configurație pentru InfiniteSculk
+# Configurare InfiniteSculk
 
-# Activează sau dezactivează complet logica pluginului
+# Activeaza sau dezactiveaza complet functionalitatea pluginului
 enabled: true
 
-# Setați pe 'true' pentru ca Sculk-ul să se poată extinde singur, chiar dacă NU moare niciun mob și nu există XP.
-# Dacă este pe true, pluginul va simula automat prezența energiei în catalizatori.
+# Daca este true, ignora XP-ul real lasat de mob si foloseste direct charge-power
 bypass-xp-requirement: true
 
-# Viteza de răspândire (Multiplicator de viteză)
-# 1 = Viteza normală din Minecraft vanilla (Răspândire standard).
-# 2 = Dublul vitezei normale (Forțează blocul să mai ruleze un ciclu suplimentar de mișcare pe același tick).
-# 3 = Viteză extremă (Atenție, poate provoca lag pe servere slabe dacă zona e imensă).
+# Multiplicator de viteza folosit cand bypass-xp-requirement este false
 spread-speed-multiplier: 2
 
-# Valoarea puterii pe care o primește Sculk-ul (Maximul vanilla este 1000)
+# Puterea de incarcare (charge) injectata cand bypass-xp-requirement este true
 charge-power: 1000
