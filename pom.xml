@@ -15,17 +15,17 @@
     </properties>
 
     <repositories>
-        <!-- Repozitoriul CodeMC funcționează ca o clonă stabilă de siguranță pentru API-uri -->
+        <!-- Repozitoriul stabil JitPack -->
         <repository>
-            <id>codemc-repo</id>
-            <url>https://codemc.io</url>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
         </repository>
     </repositories>
 
     <dependencies>
-        <!-- Versiune stabilă de API stocată permanent pe CodeMC -->
+        <!-- API-ul stabil oferit direct prin JitPack pentru versiunea 1.21.1 -->
         <dependency>
-            <groupId>org.spigotmc</groupId>
+            <groupId>com.github.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
             <version>1.21.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
