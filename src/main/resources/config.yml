@@ -15,4 +15,11 @@ charge-power: 1000
 # Numarul maxim de re-injectari de charge permise per catalizator, inainte de a lasa
 # raspandirea sa se opreasca natural. Limiteaza cat de mult se poate extinde sculk-ul
 # dintr-un singur eveniment de moarte, ca sa nu consume tot terenul din jur la nesfarsit.
-max-reblooms-per-catalyst: 500
+max-reblooms-per-catalyst: 5000
+
+# Charge-ul folosit la FIECARE re-injectare la marginea raspandirii (diferit de charge-power).
+# Pastrat MIC intentionat: un charge mic se consuma rapid langa punctul de start, deci
+# converteste 1-2 blocuri chiar la marginea raspandirii si se opreste, in loc sa ratacesca
+# mult timp prin reteaua deja existenta de sculk. Volumul de raspandire vine din numarul mare
+# de injectii (vezi max-reblooms-per-catalyst), nu dintr-un charge mare per injectie.
+rebloom-charge: 8
