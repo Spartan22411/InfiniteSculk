@@ -15,15 +15,15 @@
     </properties>
 
     <repositories>
-        <!-- Repozitoriul SpigotMC care păstrează permanent istoricul versiunilor -->
+        <!-- Repozitoriul CodeMC funcționează ca o clonă stabilă de siguranță pentru API-uri -->
         <repository>
-            <id>spigotmc-repo</id>
-            <url>https://spigotmc.org</url>
+            <id>codemc-repo</id>
+            <url>https://codemc.io</url>
         </repository>
     </repositories>
 
     <dependencies>
-        <!-- Folosim API-ul stabil 1.21.1 care conține toate metodele necesare pentru Paper 1.21.11 -->
+        <!-- Versiune stabilă de API stocată permanent pe CodeMC -->
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
