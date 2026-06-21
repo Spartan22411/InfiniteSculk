@@ -1,12 +1,20 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://apache.org"
-         xmlns:xsi="http://w3.org"
-         xsi:schemaLocation="http://apache.org http://apache.org">
-    <modelVersion>4.0.0</modelVersion>
+Bun, am confirmat exact ce bănuiam. De vreme ce lucrezi cu PaperMC (nu plain Spigot), cea mai bună variantă e să folosești repo-ul oficial PaperMC, care conține și API-ul Paper (mai multe metode utile decât Spigot pur), nu doar Spigot-API.
+Ce e greșit la tine
 
+xmlns="http://apache.org" — incomplet, ar trebui http://maven.apache.org/POM/4.0.0
+<url>https://spigotmc.org</url> — e homepage-ul, nu repo Maven. Maven nu poate descărca dependențe de acolo.
+Folosești spigot-api în loc de paper-api — pentru PaperMC e mai bine să folosești API-ul lor direct.
+
+pom.xml corectat
+xml<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
     <groupId>com.example</groupId>
     <artifactId>InfiniteSculk</artifactId>
     <version>1.0.0</version>
+    <packaging>jar</packaging>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -15,19 +23,17 @@
     </properties>
 
     <repositories>
-        <!-- Depozitul Hub-ului oficial Spigot/Paper, configurat pe adresa stabilă de producție -->
         <repository>
-            <id>spigotmc-public</id>
-            <url>https://spigotmc.org</url>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
     </repositories>
 
     <dependencies>
-        <!-- Folosim varianta de bază Spigot-API stabilă care conține toate clasele pentru evenimentele Sculk -->
         <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
-            <version>1.21-R0.1-SNAPSHOT</version>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
+            <version>1.21.11-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
