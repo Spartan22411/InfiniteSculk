@@ -3,3 +3,14 @@ version: 1.0.0
 main: com.example.infinitesculk.InfiniteSculk
 api-version: '1.21'
 author: AI_Assistant
+
+commands:
+  infinitesculk:
+    description: Comenzile pluginului InfiniteSculk
+    usage: /infinitesculk reload
+    permission: infinitesculk.admin
+
+permissions:
+  infinitesculk.admin:
+    description: Permite reincarcarea configuratiei InfiniteSculk
+    default: op
