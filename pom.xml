@@ -15,18 +15,18 @@
     </properties>
 
     <repositories>
-        <!-- Depozitul central pentru API-ul general de Spigot/Mojang -->
+        <!-- Depozit global super stabil care preia codul direct din sursa curată -->
         <repository>
-            <id>spigotmc-repo</id>
-            <url>https://spigotmc.org</url>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
         </repository>
     </repositories>
 
     <dependencies>
-        <!-- Folosim o versiune generală de Spigot API care are toate evenimentele de Sculk și este stocată permanent -->
+        <!-- Folosim direct API-ul curat de Bukkit integrat permanent în JitPack pentru versiunea 1.21 -->
         <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
+            <groupId>com.github.starmtech</groupId>
+            <artifactId>bukkit</artifactId>
             <version>1.21-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
