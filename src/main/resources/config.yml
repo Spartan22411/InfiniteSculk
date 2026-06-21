@@ -1,19 +1,18 @@
-# Configurare InfiniteSculk
+# Configurare InfiniteSculk v2.0
 
-# Activeaza sau dezactiveaza complet functionalitatea pluginului
+# Activeaza sau dezactiveaza complet extinderea automata a sculk-ului
 enabled: true
 
-# Daca este true, ignora XP-ul real lasat de mob si foloseste direct charge-power
-bypass-xp-requirement: true
+# Raza (in blocuri) in jurul fiecarui jucator in care se cauta sculk de extins.
+# Mai mare = sculk-ul se extinde si mai departe de jucator, dar costa mai mult CPU.
+# Recomandat: 30-50. Maxim permis: 100.
+search-radius: 40
 
-# Multiplicator de viteza folosit cand bypass-xp-requirement este false
-spread-speed-multiplier: 2
+# Cate blocuri se convertesc in sculk la fiecare pas al task-ului (per total, toti jucatorii).
+# Mai mare = extindere mai rapida, dar mai mult impact pe server.
+# Recomandat: 32-128.
+blocks-per-tick: 64
 
-# Puterea de incarcare (charge) injectata cand bypass-xp-requirement este true
-charge-power: 1000
-
-# Numarul maxim de "pasi" de extindere manuala permisi per catalizator, inainte de a opri
-# raspandirea. Fiecare pas converteste direct (fara cursor nativ) pana la spread-speed-multiplier
-# blocuri vecine neconvertite, garantat spre exterior. Limiteaza cat de mult se poate extinde
-# sculk-ul dintr-un singur eveniment de moarte, ca sa nu consume tot terenul din jur la nesfarsit.
-max-reblooms-per-catalyst: 5000
+# La cate tick-uri ruleaza task-ul de extindere (20 tick-uri = 1 secunda).
+# Mai mic = extindere mai deasa/rapida. 1 = cel mai agresiv. Recomandat: 2-4.
+task-interval-ticks: 2
